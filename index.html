@@ -1,0 +1,227 @@
+<!Doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simple To‑Do List — Theme Switcher + Save</title>
+  <style>
+    :root{
+      --bg:#0f1724; /* default */
+      --card:#0b1220;
+      --text:#e6eef8;
+      --muted:#95a3b8;
+      --accent:#7c5cff; /* default purple */
+      --accent-contrast:#fff;
+      --radius:12px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  padding:32px;
+  background:var(--bg);
+  color:var(--text);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.wrap{max-width:780px;margin:0 auto;display:grid;gap:20px}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{margin:0;font-size:20px;letter-spacing:0.2px;color:var(--accent)}
+p.lead{margin:0;color:var(--muted);font-size:13px}
+
+.card{
+  background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  padding:18px;border-radius:var(--radius);box-shadow:0 6px 22px rgba(2,6,23,0.6);
+  border:1px solid rgba(255,255,255,0.02);
+}
+
+form{display:flex;gap:10px}
+input[type="text"]{flex:1;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);outline:none}
+button{padding:10px 14px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-contrast);cursor:pointer;font-weight:600;transition: background 0.2s ease}
+.small-btn{padding:8px 10px;font-size:13px}
+
+.controls{display:block;gap:10px;align-items:center}
+.themes{display:flex;gap:8px;flex-wrap:wrap}
+.theme-swatch{width:34px;height:34px;border-radius:8px;border:2px solid rgba(0,0,0,0.15);cursor:pointer}
+
+ul.todos{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+li.todo{display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);border:1px solid rgba(255,255,255,0.02)}
+.todo input[type=checkbox]{width:18px;height:18px}
+.todo .text{flex:1;color:var(--text)}
+.todo .text.completed{text-decoration:line-through;color:var(--muted)}
+.todo .meta{display:flex;gap:8px}
+.icon-btn{background:transparent;border:1px solid rgba(255,255,255,0.03);padding:6px;border-radius:8px;cursor:pointer;color:var(--text)}
+
+footer{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:13px}
+
+.accent{background:var(--accent);color:var(--accent-contrast)}
+
+@media (max-width:520px){body{padding:18px}.wrap{gap:12px}}
+
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="todo">
+        <h1>Simple To‑Do List</h1>
+        <p class="lead">Switch between 7 vibrant themes — your tasks save automatically.</p>
+      </div> 
+      <div class="controls">
+        <div class="themes" id="themes" aria-label="Theme switcher"></div> <br>
+        <button id="exportBtn" class="small-btn">Save</button>
+      </div>
+    </header><section class="card">
+  <form id="addForm">
+    <input id="taskInput" type="text" placeholder="Add a new task" aria-label="New task" autocomplete="off" />
+    <button id="addBtn" type="submit">Add</button>
+  </form>
+
+  <ul id="todos" class="todos" aria-live="polite"></ul>
+
+  <footer>
+    <div id="counts">0 tasks</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="clearCompleted" class="icon-btn">Clear Completed</button>
+      <button id="clearAll" class="icon-btn">Clear All</button>
+    </div>
+  </footer>
+</section>
+
+  </div>  <script>
+    const STORAGE_KEY = 'simple_todo_v1';
+    const THEME_KEY = 'simple_todo_theme_v1';
+
+    const themes = [
+      {name:'Purple', color:'#7c5cff'},
+      {name:'Teal', color:'#06b6d4'},
+      {name:'Amber', color:'#f59e0b'},
+      {name:'Rose', color:'#fb7185'},
+      {name:'Lime', color:'#84cc16'},
+      {name:'Sky', color:'#38bdf8'},
+      {name:'Slate', color:'#64748b'}
+    ];
+
+    const el = id => document.getElementById(id);
+    let state = loadState();
+
+    const themesEl = el('themes');
+    const todosEl = el('todos');
+    const input = el('taskInput');
+    const addForm = el('addForm');
+    const counts = el('counts');
+    const exportBtn = el('exportBtn');
+    const clearCompleted = el('clearCompleted');
+    const clearAll = el('clearAll');
+
+    function init(){
+      renderThemeSwatches();
+      applyTheme(state.theme || themes[0].color);
+      renderTodos();
+      attachEvents();
+    }
+
+    function loadState(){
+      try{const raw = localStorage.getItem(STORAGE_KEY);return raw?JSON.parse(raw):{todos:[],theme:localStorage.getItem(THEME_KEY)||themes[0].color};}catch(e){return {todos:[],theme:themes[0].color}}
+    }
+    function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify({todos:state.todos,theme:state.theme}));localStorage.setItem(THEME_KEY,state.theme);} 
+
+    function renderThemeSwatches(){
+      themes.forEach(t=>{
+        const btn = document.createElement('button');
+        btn.className='theme-swatch';
+        btn.title = t.name;
+        btn.style.background = t.color;
+        btn.addEventListener('click', ()=>{
+          applyTheme(t.color);
+          state.theme = t.color; saveState();
+        });
+        themesEl.appendChild(btn);
+      });
+    }
+
+    function applyTheme(color){
+      document.documentElement.style.setProperty('--accent', color);
+      document.body.style.setProperty('--bg', shadeColor(color, -60));
+      document.body.style.setProperty('--text', color);
+      const c = hexToRgb(color);
+      const lum = (0.2126*c.r + 0.7152*c.g + 0.0722*c.b)/255;
+      document.documentElement.style.setProperty('--accent-contrast', lum>0.6? '#000' : '#fff');
+      state.theme = color;
+    }
+
+    function hexToRgb(hex){
+      const h = hex.replace('#','');
+      const bigint = parseInt(h.length===3? h.split('').map(c=>c+c).join('') : h,16);
+      return {r:(bigint>>16)&255,g:(bigint>>8)&255,b:bigint&255};
+    }
+
+    function shadeColor(color, percent){
+      const f=parseInt(color.slice(1),16),t=percent<0?0:255,p=percent<0?percent*-1:percent;
+      const R=f>>16,G=f>>8&0x00FF,B=f&0x0000FF;
+      return "#"+(0x1000000+(Math.round((t-R)*p/100)+R)*0x10000+(Math.round((t-G)*p/100)+G)*0x100+(Math.round((t-B)*p/100)+B)).toString(16).slice(1);
+    }
+
+    function renderTodos(){
+      todosEl.innerHTML='';
+      state.todos.forEach((t, i)=>{
+        const li = document.createElement('li'); li.className='todo';
+        const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = !!t.done;
+        cb.addEventListener('change', ()=>{ state.todos[i].done = cb.checked; saveState(); renderTodos(); });
+
+        const span = document.createElement('div'); span.className='text'; span.textContent = t.text;
+        if(t.done) span.classList.add('completed');
+        span.addEventListener('dblclick', ()=>{ editTask(i); });
+
+        const meta = document.createElement('div'); meta.className='meta';
+        const del = document.createElement('button'); del.className='icon-btn'; del.textContent='Delete';
+        del.addEventListener('click', ()=>{ state.todos.splice(i,1); saveState(); renderTodos(); });
+
+        meta.appendChild(del);
+        li.appendChild(cb); li.appendChild(span); li.appendChild(meta);
+        todosEl.appendChild(li);
+      });
+      updateCounts();
+    }
+
+    function updateCounts(){
+      const total = state.todos.length; const left = state.todos.filter(t=>!t.done).length;
+      counts.textContent = `${left} left • ${total} total`;
+    }
+
+    function addTask(text){
+      const clean = text && text.trim(); if(!clean) return;
+      state.todos.unshift({text:clean, done:false}); saveState(); renderTodos();
+    }
+
+    function editTask(index){
+      const newText = prompt('Edit task', state.todos[index].text);
+      if(newText===null) return;
+      const clean = newText.trim();
+      if(clean===''){ state.todos.splice(index,1); } else { state.todos[index].text = clean; }
+      saveState(); renderTodos();
+    }
+
+    function exportToText(){
+      if(!state.todos.length){ alert('No tasks to save'); return; }
+      const lines = state.todos.map(t=> (t.done? '[x] ':'[ ] ') + t.text );
+      const blob = new Blob([lines.join('\n')], {type:'text/plain;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `tasks-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.txt`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    function attachEvents(){
+      addForm.addEventListener('submit', e=>{ e.preventDefault(); addTask(input.value); input.value=''; input.focus(); });
+      exportBtn.addEventListener('click', exportToText);
+      clearCompleted.addEventListener('click', ()=>{ state.todos = state.todos.filter(t=>!t.done); saveState(); renderTodos(); });
+      clearAll.addEventListener('click', ()=>{ if(confirm('Clear ALL tasks?')){ state.todos = []; saveState(); renderTodos(); }});
+    }
+
+    init();
+  </script></body>
+</html>
